@@ -9,6 +9,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 
+// Not tested on Fb, needs domain verification
+// twitter- needs accessible image
+// whatsapp | insta | fb
+
 @SpringBootApplication
 public class Application {
 
@@ -29,17 +33,7 @@ public class Application {
         SpringApplication.run(Application.class, args);
     }
 
-    @Bean
     CommandLineRunner commandLineRunner(){
-        return args -> {
-
-            Page page =  new Page();
-            page.setOriginalUrl("http://www.thrillophilia.com/blog/india-best-travel-bloggers/");
-            page.setTitle("INDIA’S BEST TRAVEL BLOGGERS: WORLD SERIES 2016");
-            page.setDescription("Seeing new places, meeting different people, trying some tasty dishes will definitely make you feel like living in an alternate world. We at Thrillophilia are coming up with a series of top bloggers from around the globe. Let’s first read about India’s top bloggers and learn about the fascinating destinations where they have travelled. Also learn about the various travel hacks they have got to share with you.");
-            page.setImage("http://www.thrillophilia.com/blog/wp-content/uploads/2016/11/Top-54-Indian-Travel-Bloggers-2016-6.jpg");
-
-            logger.info(mapper.writeValueAsString(page));
-        };
+        return args -> logger.info("Link Generator Running...");
     }
 }
