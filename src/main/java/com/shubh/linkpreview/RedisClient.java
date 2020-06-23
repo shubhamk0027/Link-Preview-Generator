@@ -2,14 +2,12 @@ package com.shubh.linkpreview;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.Test;
 import org.redisson.Redisson;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -20,7 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class RedisClient {
 
     private static final Logger logger = LoggerFactory.getLogger(RedisClient.class);
-    private final ObjectMapper mapper= new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper();
     private final RedissonClient redissonClient;
 
     private final AtomicLong counter;
@@ -29,54 +27,53 @@ public class RedisClient {
 
     public RedisClient(
             @Value("${LEN}") int LEN,
-            @Value("${TTL}") int days){
+            @Value("${TTL}") int days) {
 
-        this.LEN=LEN;
-        this.TTLDays=days;
+        this.LEN = LEN;
+        this.TTLDays = days;
 
-        Config config= new Config();
+        Config config = new Config();
         config.useSingleServer().setAddress("redis://127.0.0.1:6379");
-        redissonClient= Redisson.create(config);
+        redissonClient = Redisson.create(config);
 
         // Load/Store the counter from the redis
         counter = new AtomicLong(loadCounter());
     }
 
 
-    private long loadCounter(){
+    private long loadCounter() {
         // will not collide with other keys
-        RBucket<Long> counterBucket = redissonClient.getBucket("COUNTER_VALUE");
+        RBucket <Long> counterBucket = redissonClient.getBucket("COUNTER_VALUE");
         if(!counterBucket.isExists()) {
             logger.info("No initial counter value found. Starting it from 0");
             return 0;
         }
-        logger.info("Loading counter value from "+counterBucket.get());
+        logger.info("Loading counter value from " + counterBucket.get());
         return counterBucket.get();
     }
 
-    private void saveCounter(){
-        RBucket<Long> counterBucket = redissonClient.getBucket("COUNTER_VALUE");
+    private void saveCounter() {
+        RBucket <Long> counterBucket = redissonClient.getBucket("COUNTER_VALUE");
         counterBucket.set(counter.longValue());
     }
 
 
-    private String generateURL(){
+    private String generateURL() {
 
         long num = counter.incrementAndGet();
         saveCounter();
 
-        String binary = Long.toBinaryString((1L<<47)|num).substring(1);     // 62^8 > 2^47 => 2^47 numbers can be generated without duplicates!
-        logger.info("Key Generated: "+binary+" of len "+binary.length());      // 10^5 billion urls!
+        String binary = Long.toBinaryString((1L << 47) | num).substring(1);         // 62^8 > 2^47 => 2^47 numbers can be generated without duplicates!
+        // logger.info("Key Generated: "+binary+" of len "+binary.length());      // 10^5 billion urls!
         binary = new StringBuilder(binary).reverse().toString();
-        num =  Long.parseLong(binary,2);
-        logger.info("Using num "+num);
+        num = Long.parseLong(binary, 2);
 
-        StringBuilder url= new StringBuilder();
-        for(int i=0;i<LEN;i++){
+        StringBuilder url = new StringBuilder();
+        for(int i = 0; i < LEN; i++) {
             long SZ = 62;
-            String INDICES = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-            url.append(INDICES.charAt((int) (num%SZ)));
-            num=num/SZ;
+            String INDICES = "Za0Yb1Xc2Wd3Ve4Uf5Tg6Sh7Ri8Qj9PkOlNmMnLoKpJqIrHsGtFuEvDwCxByAz";
+            url.append(INDICES.charAt((int) (num % SZ)));
+            num = num / SZ;
         }
 
         return url.toString();
@@ -85,7 +82,7 @@ public class RedisClient {
 
     public Meta getFromShortenUrl(String shortenUrl) throws JsonProcessingException {
 
-        RBucket<String> shortUrlToPage = redissonClient.getBucket(shortenUrl);
+        RBucket <String> shortUrlToPage = redissonClient.getBucket(shortenUrl);
         if(!shortUrlToPage.isExists()) {
             throw new IllegalArgumentException("This Page does not exists!");
         }
@@ -94,11 +91,11 @@ public class RedisClient {
         Meta meta = mapper.readValue(pageString, Meta.class);
 
         String originalUrl = meta.getOriginalUrl();
-        RBucket<String> originalUrlToPage = redissonClient.getBucket(originalUrl);
+        RBucket <String> originalUrlToPage = redissonClient.getBucket(originalUrl);
 
         // update the TTL
-        originalUrlToPage.set(pageString,TTLDays,TimeUnit.DAYS);
-        shortUrlToPage.set(pageString,TTLDays,TimeUnit.DAYS);
+        originalUrlToPage.set(pageString, TTLDays, TimeUnit.DAYS);
+        shortUrlToPage.set(pageString, TTLDays, TimeUnit.DAYS);
 
         return meta;
     }
@@ -106,48 +103,49 @@ public class RedisClient {
 
     /**
      * Will return a new url or update the TTL days of the original URL along with new content
+     *
      * @param meta the topic,url.. rest details
      * @return the shortenURL
      */
     // can be improved by storing shortenUrl inside another HashMap!
     public String getFromMetaDetails(Meta meta) throws JsonProcessingException {
 
-        RBucket<String> orgUrlToPage = redissonClient.getBucket(meta.getOriginalUrl());
+        RBucket <String> orgUrlToPage = redissonClient.getBucket(meta.getOriginalUrl());
 
         if(orgUrlToPage.isExists()) {
 
             String pageString = orgUrlToPage.get();
             Meta readMeta = mapper.readValue(pageString, Meta.class);
 
-            String shortenUrl =  readMeta.getShortenUrl();
+            String shortenUrl = readMeta.getShortenUrl();
             meta.setShortenUrl(shortenUrl);
             // use current/updated meta details for updating the content
-            pageString=mapper.writeValueAsString(meta);
+            pageString = mapper.writeValueAsString(meta);
 
-            RBucket<String> shortUrlToPage = redissonClient.getBucket(shortenUrl);
-            orgUrlToPage.set(pageString,TTLDays,TimeUnit.DAYS);
-            shortUrlToPage.set(pageString,TTLDays,TimeUnit.DAYS);
+            RBucket <String> shortUrlToPage = redissonClient.getBucket(shortenUrl);
+            orgUrlToPage.set(pageString, TTLDays, TimeUnit.DAYS);
+            shortUrlToPage.set(pageString, TTLDays, TimeUnit.DAYS);
 
             return shortenUrl;
         }
 
         String shortenUrl = generateURL();
-        logger.info("Key Generated: "+shortenUrl);
+        logger.info("Key Generated: " + shortenUrl);
         meta.setShortenUrl(shortenUrl);
 
         String pageString;
-        try{
+        try {
             pageString = mapper.writeValueAsString(meta);
-        }catch(JsonProcessingException e){
-            logger.error("Error in serializing the Page details",e);
+        }catch(JsonProcessingException e) {
+            logger.error("Error in serializing the Page details", e);
             throw e;
         }
 
-        RBucket<String> shortUrlToPage = redissonClient.getBucket(shortenUrl);
-        shortUrlToPage.set(pageString,TTLDays,TimeUnit.DAYS);
-        orgUrlToPage.set(pageString,TTLDays, TimeUnit.DAYS);
+        RBucket <String> shortUrlToPage = redissonClient.getBucket(shortenUrl);
+        shortUrlToPage.set(pageString, TTLDays, TimeUnit.DAYS);
+        orgUrlToPage.set(pageString, TTLDays, TimeUnit.DAYS);
 
-        logger.info("Generated "+shortenUrl+" For "+pageString);
+        logger.info("Generated " + shortenUrl + " For " + pageString);
 
         return shortenUrl;
     }

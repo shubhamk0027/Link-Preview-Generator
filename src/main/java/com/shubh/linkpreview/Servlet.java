@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -22,11 +23,11 @@ class Servlet extends HttpServlet {
 
     private static final Logger logger = LoggerFactory.getLogger(Servlet.class);
     private final RedisClient redisClient;
-    private final ObjectMapper mapper= new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper();
 
 
-    Servlet(RedisClient redisClient){
-        this.redisClient=redisClient;
+    Servlet(RedisClient redisClient) {
+        this.redisClient = redisClient;
     }
 
 
@@ -42,20 +43,20 @@ class Servlet extends HttpServlet {
         return domain.startsWith("www.") ? domain.substring(4) : domain;
     }
 
-    private String getHtml(Meta meta){
-        return  "<!DOCTYPE html>\n" +
+    private String getHtml(Meta meta) {
+        return "<!DOCTYPE html>\n" +
                 "<html lang=\"en\">\n" +
                 "<head>\n" +
                 "    <meta charset=\"utf-8\">\n" +
-                "    <title>"+ meta.getTitle()+"</title>\n" +
-                "    <meta property=\"og:title\" content=\""+ meta.getTitle()+"\" />\n" +
-                "    <meta property=\"og:image\" content=\""+ meta.getImage()+"\" />\n" +
-                "    <meta property=\"og:description\" content=\""+ meta.getDescription()+"\" />\n" +
-                "    <meta property=\"og:site_name\" content=\""+ meta.getDomainName()+"\" />\n" +
-                "    <meta property=\"og:url\" content=\""+ meta.getOriginalUrl()+"\" />\n" +
+                "    <title>" + meta.getTitle() + "</title>\n" +
+                "    <meta property=\"og:title\" content=\"" + meta.getTitle() + "\" />\n" +
+                "    <meta property=\"og:image\" content=\"" + meta.getImage() + "\" />\n" +
+                "    <meta property=\"og:description\" content=\"" + meta.getDescription() + "\" />\n" +
+                "    <meta property=\"og:site_name\" content=\"" + meta.getDomainName() + "\" />\n" +
+                "    <meta property=\"og:url\" content=\"" + meta.getOriginalUrl() + "\" />\n" +
                 "    <meta property=\"twitter:card\" content=\"summary_large_image\" />\n" +
                 "    <script>\n" +
-                "       window.location = \""+ meta.getOriginalUrl()+"\";\n" +
+                "       window.location = \"" + meta.getOriginalUrl() + "\";\n" +
                 "    </script>\n" +
                 "</head>\n" +
                 "<body>\n" +
@@ -66,14 +67,14 @@ class Servlet extends HttpServlet {
 
 
     /**
-     * @param req Request for getting the html page associated with the url
+     * @param req  Request for getting the html page associated with the url
      * @param resp Return the html content after generating it if url exists
      */
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        logger.info("GET "+req.getRequestURI());
+        logger.info("GET " + req.getRequestURI());
 
-        try{
+        try {
 
             if(req.getRequestURI().equals("/favicon.ico")) {
                 resp.setStatus(200);
@@ -81,15 +82,15 @@ class Servlet extends HttpServlet {
             }
 
             Meta meta = redisClient.getFromShortenUrl(req.getRequestURI().substring(1));
-            resp.setHeader("Content-Type","text/html; charset=UTF-8");
+            resp.setHeader("Content-Type", "text/html; charset=UTF-8");
             PrintWriter out = resp.getWriter();
-            String html =getHtml(meta);
+            String html = getHtml(meta);
             out.write(html);
             out.close();
             resp.setStatus(200);
-            logger.info("Returned :"+html);
+            logger.info("Returned :" + html);
 
-        }catch(IllegalArgumentException | JsonProcessingException e){
+        }catch(IllegalArgumentException | JsonProcessingException e) {
 
             e.getStackTrace();
             PrintWriter out = resp.getWriter();
@@ -103,29 +104,30 @@ class Servlet extends HttpServlet {
 
 
     /**
-     * @param req Post req with Meta, update the info with new data and return old/new url if it originalUrl does not exists
+     * @param req  Post req with Meta, update the info with new data and return old/new url if it originalUrl does not exists
      * @param resp shortenUrl, generate it if it does not exists
      */
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String body = getBody(req);
-        logger.info("POST "+req.getRequestURI()+" requested with "+body);
+        logger.info("POST " + req.getRequestURI() + " requested with " + body);
 
-        try{
+        try {
 
-            if(!req.getRequestURI().equals("/generate")) throw new IllegalArgumentException("This page does not exists!");
+            if(!req.getRequestURI().equals("/generate"))
+                throw new IllegalArgumentException("This page does not exists!");
             Meta meta = mapper.readValue(body, Meta.class);
             meta.setDomainName(getDomainName(meta.getOriginalUrl()));
-            logger.info("Getting request for link: "+ meta.getOriginalUrl());
+            logger.info("Getting request for link: " + meta.getOriginalUrl());
 
             String shortenUrl = redisClient.getFromMetaDetails(meta);
             PrintWriter out = resp.getWriter();
-            out.write("{\"shortenUrl\":\""+shortenUrl+"\"}");
+            out.write("{\"shortenUrl\":\"" + shortenUrl + "\"}");
             out.close();
             resp.setStatus(200);
-            logger.info("Returned :"+"{\"shortenUrl\":\""+shortenUrl+"\"}");
+            logger.info("Returned :" + "{\"shortenUrl\":\"" + shortenUrl + "\"}");
 
-        }catch(IllegalArgumentException | JsonProcessingException | URISyntaxException e){
+        }catch(IllegalArgumentException | JsonProcessingException | URISyntaxException e) {
 
             PrintWriter out = resp.getWriter();
             out.write(e.getMessage());
@@ -134,6 +136,18 @@ class Servlet extends HttpServlet {
             resp.setStatus(404);
             logger.info("Meta tag values found incorrect");
 
+        }
+    }
+
+    @Override
+    protected void service(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        if(req.getMethod().equals("post") || req.getMethod().equals("POST") ||
+                req.getMethod().equals("get") || req.getMethod().equals("GET")) super.service(req, resp);
+        else {
+            logger.info("This method is not supported");
+            PrintWriter out = resp.getWriter();
+            out.println("Invalid Request!");
+            resp.setStatus(400);
         }
     }
 
