@@ -22,12 +22,12 @@ import java.util.Scanner;
 class Servlet extends HttpServlet {
 
     private static final Logger logger = LoggerFactory.getLogger(Servlet.class);
-    private final RedisClient redisClient;
+    private final LocalRedisClient localRedisClient;
     private final ObjectMapper mapper = new ObjectMapper();
 
 
-    Servlet(RedisClient redisClient) {
-        this.redisClient = redisClient;
+    Servlet(LocalRedisClient localRedisClient) {
+        this.localRedisClient = localRedisClient;
     }
 
 
@@ -81,7 +81,7 @@ class Servlet extends HttpServlet {
                 return;
             }
 
-            Meta meta = redisClient.getFromShortenUrl(req.getRequestURI().substring(1));
+            Meta meta = localRedisClient.getFromShortenUrl(req.getRequestURI().substring(1));
             resp.setHeader("Content-Type", "text/html; charset=UTF-8");
             PrintWriter out = resp.getWriter();
             String html = getHtml(meta);
@@ -120,7 +120,7 @@ class Servlet extends HttpServlet {
             meta.setDomainName(getDomainName(meta.getOriginalUrl()));
             logger.info("Getting request for link: " + meta.getOriginalUrl());
 
-            String shortenUrl = redisClient.getFromMetaDetails(meta);
+            String shortenUrl = localRedisClient.getFromMetaDetails(meta);
             PrintWriter out = resp.getWriter();
             out.write("{\"shortenUrl\":\"" + shortenUrl + "\"}");
             out.close();
